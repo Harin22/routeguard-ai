@@ -10,37 +10,60 @@ API_KEY = os.getenv("NEWSDATA_API_KEY")
 API_URL = "https://newsdata.io/api/1/latest"
 
 
-def get_region(lat, lon):
+def get_location_name(lat, lon):
     """
-    Convert a route coordinate into a broad geographic region.
+    Convert route coordinates into a useful
+    maritime/geographic location label.
     """
 
-    if 20 < lat < 40 and 30 < lon < 60:
-        return "Middle East"
+    # Europe / English Channel
+    if lat > 48 and -10 < lon < 5:
+        return "English Channel Europe"
 
-    elif 40 < lat < 60 and -10 < lon < 40:
-        return "Europe"
+    # Mediterranean
+    elif 30 < lat < 45 and -6 < lon < 35:
+        return "Mediterranean Sea"
 
-    elif 5 < lat < 30 and 60 < lon < 100:
-        return "South Asia"
+    # Suez / Red Sea
+    elif 10 < lat < 32 and 30 < lon < 45:
+        return "Red Sea Suez"
 
-    elif -10 < lat < 25 and 95 < lon < 130:
-        return "Southeast Asia"
+    # Arabian Sea / Indian Ocean
+    elif 5 < lat < 25 and 45 < lon < 80:
+        return "Arabian Sea Indian Ocean"
 
-    elif 15 < lat < 45 and 100 < lon < 145:
-        return "East Asia"
+    # Bay of Bengal
+    elif 5 < lat < 22 and 80 < lon < 100:
+        return "Bay of Bengal"
 
-    elif 20 < lat < 50 and -130 < lon < -60:
-        return "North America"
+    # Southeast Asia / Malacca
+    elif -5 < lat < 15 and 95 < lon < 110:
+        return "Strait of Malacca Southeast Asia"
+
+    # South China Sea
+    elif 5 < lat < 25 and 105 < lon < 120:
+        return "South China Sea"
+
+    # East China Sea
+    elif 20 < lat < 40 and 120 < lon < 135:
+        return "East China Sea"
+
+    # North Pacific
+    elif lat > 25 and 135 < lon < 180:
+        return "North Pacific"
+
+    # North Atlantic
+    elif lat > 30 and -60 < lon < -10:
+        return "North Atlantic"
 
     else:
-        return "Global"
+        return "Global Maritime"
 
 
 def fetch_zone_news(lat, lon):
     """
-    Fetch recent geopolitical and maritime-related
-    news relevant to the zone.
+    Fetch recent geopolitical and maritime news
+    relevant to the route zone.
     """
 
     if not API_KEY:
@@ -48,18 +71,18 @@ def fetch_zone_news(lat, lon):
             "NEWSDATA_API_KEY not found in .env"
         )
 
-    region = get_region(lat, lon)
-
-    query = (
-        f"{region} war OR conflict OR military OR "
-        f"attack OR tension OR security OR shipping"
+    location = get_location_name(
+        lat,
+        lon
     )
 
+    query = location
+
     params = {
-        "apikey": API_KEY,
-        "q": query,
-        "language": "en",
-        "size": 10
+    "apikey": API_KEY,
+    "q": query,
+    "language": "en",
+    "size": 10
     }
 
     response = requests.get(
@@ -72,10 +95,13 @@ def fetch_zone_news(lat, lon):
 
     data = response.json()
 
-    articles = data.get("results", [])
+    articles = data.get(
+        "results",
+        []
+    )
 
     return {
-        "region": region,
+        "location": location,
         "articles": articles
     }
 
@@ -101,10 +127,17 @@ def attach_news_to_zones(zones):
 
         zone_data = zone.copy()
 
-        zone_data["region"] = news_data["region"]
-        zone_data["news"] = news_data["articles"]
+        zone_data["news_location"] = (
+            news_data["location"]
+        )
 
-        enriched_zones.append(zone_data)
+        zone_data["news"] = (
+            news_data["articles"]
+        )
+
+        enriched_zones.append(
+            zone_data
+        )
 
     return enriched_zones
 
@@ -130,7 +163,9 @@ if __name__ == "__main__":
         n_zones=15
     )
 
-    enriched_zones = attach_news_to_zones(zones)
+    enriched_zones = attach_news_to_zones(
+        zones
+    )
 
     print("\n=== NEWS TEST ===")
 
@@ -138,7 +173,8 @@ if __name__ == "__main__":
 
         print(
             f"\nZone {zone['zone_id']:02d} | "
-            f"Region: {zone['region']}"
+            f"Location: "
+            f"{zone['news_location']}"
         )
 
         print(
@@ -149,5 +185,6 @@ if __name__ == "__main__":
         for article in zone["news"][:3]:
 
             print(
-                f"- {article.get('title', 'No title')}"
+                f"- "
+                f"{article.get('title', 'No title')}"
             )
