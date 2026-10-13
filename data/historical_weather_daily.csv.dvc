@@ -1,0 +1,5 @@
+outs:
+- md5: ea847098e9c5ad9147ab0c292d662950
+  size: 70449
+  hash: md5
+  path: historical_weather_daily.csv

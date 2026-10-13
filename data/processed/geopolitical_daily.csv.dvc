@@ -1,0 +1,5 @@
+outs:
+- md5: b3becd01297afca194479269ad32a562
+  size: 74595
+  hash: md5
+  path: geopolitical_daily.csv
