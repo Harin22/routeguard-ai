@@ -74,7 +74,7 @@ If evidence is insufficient, say so clearly.
 Distinguish reported facts from your interpretation.
 Do not claim that an article proves a ship will be disrupted.
 Use source titles when referring to evidence.
-Mention uncertainty where appropriate.
+Mention uncertainty where appropriate.. 
 
 Conversation history:
 {history_text or "No previous messages."}
