@@ -1,0 +1,36 @@
+name: RouteGuard CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check Python syntax
+        run: python -m compileall -q src
+
+      - name: Test route generation and model
+        run: |
+          python -c "import joblib; from src.data.route_sampler import build_route, generate_alternative_routes; start=[-0.1278,51.5074]; end=[121.4737,31.2304]; route=build_route(start,end); alternatives=generate_alternative_routes(start,end); model=joblib.load('models/logistic_regression.joblib'); assert route['distance_km'] > 0; assert len(alternatives) > 0; assert hasattr(model,'predict_proba'); print('Route and model tests passed')"
