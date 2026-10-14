@@ -1,31 +1,30 @@
+
 import searoute as sr
 
 
-def generate_maritime_route(start, end):
+def generate_maritime_route(start, end, restrictions=None):
     """
-    Generate the shortest maritime route between two coordinates.
+    Generate a maritime route between two coordinates.
 
-    Coordinates must be:
-        [longitude, latitude]
+    Coordinates: [longitude, latitude]
     """
+    kwargs = {
+        "units": "km",
+        "append_orig_dest": True,
+    }
 
-    route = sr.searoute(
-        start,
-        end,
-        units="km",
-        append_orig_dest=True
-    )
+    if restrictions is not None:
+        kwargs["restrictions"] = restrictions
 
-    return route
+    return sr.searoute(start, end, **kwargs)
 
 
 def sample_route_points(route, n_points=5):
     """
-    Select evenly distributed points along the full route.
-
-    The complete route geometry is preserved.
-    These points are only representative monitoring points.
+    Select evenly distributed monitoring points along a route.
     """
+    if n_points < 2:
+        raise ValueError("n_points must be at least 2.")
 
     coordinates = route.geometry.coordinates
 
@@ -37,75 +36,102 @@ def sample_route_points(route, n_points=5):
         for i in range(n_points)
     ]
 
-    sampled_points = [
-        coordinates[index]
-        for index in indices
-    ]
-
-    return sampled_points
+    return [coordinates[index] for index in indices]
 
 
 def build_route(start, end, n_points=5):
     """
-    Generate a maritime route and its monitoring points.
+    Build one sea route with distance, duration and monitoring points.
     """
-
     route = generate_maritime_route(start, end)
-
-    full_route = route.geometry.coordinates
-
-    monitoring_points = sample_route_points(
-        route,
-        n_points=n_points
-    )
 
     return {
         "distance_km": route.properties["length"],
         "duration_hours": route.properties["duration_hours"],
-        "full_route": full_route,
-        "monitoring_points": monitoring_points
+        "full_route": route.geometry.coordinates,
+        "monitoring_points": sample_route_points(route, n_points),
     }
 
 
-if __name__ == "__main__":
+def generate_alternative_routes(start, end, n_points=5):
+    """
+    Generate distinct route candidates using different passage restrictions.
 
-    #Shanghai → Rotterdam
+    Candidates are deduplicated by route geometry and sorted by distance.
+    """
+    configurations = [
+        ["northwest"],
+        ["northwest", "suez"],
+        ["northwest", "gibraltar"],
+        ["northwest", "suez", "gibraltar"],
+    ]
+
+    candidates = []
+    seen_geometries = set()
+
+    for restrictions in configurations:
+        try:
+            route = generate_maritime_route(
+                start,
+                end,
+                restrictions=restrictions,
+            )
+
+            coordinates = route.geometry.coordinates
+
+            if not coordinates:
+                continue
+
+            geometry_key = tuple(
+                (round(lon, 4), round(lat, 4))
+                for lon, lat in coordinates
+            )
+
+            if geometry_key in seen_geometries:
+                continue
+
+            seen_geometries.add(geometry_key)
+
+            candidates.append({
+                "restrictions": restrictions,
+                "distance_km": route.properties["length"],
+                "duration_hours": route.properties["duration_hours"],
+                "full_route": coordinates,
+                "monitoring_points": sample_route_points(
+                    route, n_points=n_points
+                ),
+            })
+
+        except Exception as error:
+            print(
+                f"Skipping restrictions {restrictions}: {error}"
+            )
+
+    candidates.sort(key=lambda item: item["distance_km"])
+    return candidates
+
+
+if __name__ == "__main__":
+    # Shanghai -> Rotterdam
     start = [121.4737, 31.2304]
     end = [4.4777, 51.9244]
 
-    result = build_route(
-        start,
-        end,
-        n_points=5
+    result = build_route(start, end, n_points=5)
+
+    print("\n=== DEFAULT SEA ROUTE ===")
+    print(f"Distance: {result['distance_km']:.2f} km")
+    print(f"Duration: {result['duration_hours']:.2f} hours")
+    print(f"Geometry points: {len(result['full_route'])}")
+
+    print("\n=== DISTINCT SEA-ROUTE CANDIDATES ===")
+    alternatives = generate_alternative_routes(
+        start, end, n_points=5
     )
 
-    print("\n=== ROUTE INFORMATION ===")
-
-    print(
-        f"Distance: "
-        f"{result['distance_km']:.2f} km"
-    )
-
-    print(
-        f"Duration: "
-        f"{result['duration_hours']:.2f} hours"
-    )
-
-    print(
-        f"Full route coordinates: "
-        f"{len(result['full_route'])}"
-    )
-
-    print("\n=== monitoring point ===")
-
-    for i, point in enumerate(
-        result["monitoring_points"],
-        start=1
-    ):
-        longitude, latitude = point
-
+    for index, route in enumerate(alternatives, start=1):
         print(
-            f"P{i}: "
-            f"Latitude={latitude:.4f}, "
-            f"Longitude={longitude:.4f}"
+            f"Route {index}: "
+            f"{route['distance_km']:.2f} km | "
+            f"{route['duration_hours']:.2f} hours | "
+            f"Restrictions: {route['restrictions']}"
         )
