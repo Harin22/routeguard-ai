@@ -1,4 +1,3 @@
-
 import os
 import hashlib
 from pathlib import Path
@@ -70,17 +69,16 @@ def stable_article_id(article):
         identity = f"newsdata:{str(article_id).strip()}"
     else:
         url = normalize_url(article.get("link", ""))
-
         if not url:
-            raise ValueError(
-                "Article requires article_id or link."
-            )
-
+            raise ValueError("Article requires article_id or link.")
         identity = f"url:{url}"
 
-    return hashlib.sha256(
-        identity.encode("utf-8")
-    ).hexdigest()
+    # Keep the same article independently searchable for each route.
+    route_key = str(article.get("route_key", "") or "").strip()
+    if route_key:
+        identity = f"route:{route_key}|{identity}"
+
+    return hashlib.sha256(identity.encode("utf-8")).hexdigest()
 
 
 def create_embeddings(texts):
@@ -179,6 +177,7 @@ def add_news_articles(articles):
             "zone_ids": ",".join(zone_ids),
             "article_id": str(article.get("article_id", "") or ""),
             "link": str(article.get("link", "") or ""),
+            "route_key": str(article.get("route_key", "") or ""),
         }
 
         records.append((doc_id, document, metadata))
@@ -213,8 +212,8 @@ def add_news_articles(articles):
 # SEMANTIC SEARCH
 # =========================================================
 
-def search_news(query, top_k=5):
-    """Retrieve relevant news documents using semantic similarity."""
+def search_news(query, top_k=5, route_key=None):
+    """Retrieve semantically relevant news, optionally limited to one route."""
 
     if not query or not query.strip():
         raise ValueError("Search query cannot be empty.")
@@ -222,7 +221,9 @@ def search_news(query, top_k=5):
     if top_k < 1:
         raise ValueError("top_k must be at least 1.")
 
-    if collection.count() == 0:
+    where = {"route_key": str(route_key)} if route_key else None
+    available_count = collection.count(where=where) if where else collection.count()
+    if available_count == 0:
         return {
             "documents": [[]],
             "metadatas": [[]],
@@ -241,7 +242,8 @@ def search_news(query, top_k=5):
 
     return collection.query(
         query_embeddings=[query_embedding],
-        n_results=min(top_k, collection.count()),
+        n_results=min(top_k, available_count),
+        where=where,
         include=["documents", "metadatas", "distances"],
     )
 

@@ -1,15 +1,14 @@
-
 from src.rag.vector_store import search_news
 from src.rag.geopolitical_analyzer import call_gemini, call_mercury
 
 
-def chat_with_routeguard(question, history=None, top_k=5):
+def chat_with_routeguard(question, history=None, top_k=5, route_key=None):
     """Answer a user question using retrieved maritime news."""
 
     if not question or not question.strip():
         raise ValueError("Question cannot be empty.")
 
-    results = search_news(question.strip(), top_k=top_k)
+    results = search_news(question.strip(), top_k=top_k, route_key=route_key)
 
     documents = results.get("documents", [[]])[0] or []
     metadatas = results.get("metadatas", [[]])[0] or []

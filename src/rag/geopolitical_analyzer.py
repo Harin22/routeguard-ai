@@ -77,18 +77,20 @@ vector_store = Chroma(
 )
 
 
-def retrieve_news_for_zone(latitude, longitude, top_k=5):
+def retrieve_news_for_zone(latitude, longitude, top_k=5, route_key=None):
     query = (
         "maritime geopolitical risks and "
         "shipping disruptions near "
         f"latitude {latitude:.4f}, "
         f"longitude {longitude:.4f}"
     )
+    search_kwargs = {"k": top_k}
+    if route_key:
+        search_kwargs["filter"] = {"route_key": str(route_key)}
+    return vector_store.similarity_search(query, **search_kwargs)
 
-    return vector_store.similarity_search(query, k=top_k)
 
-
-def collect_route_evidence(zones, top_k=5):
+def collect_route_evidence(zones, top_k=5, route_key=None):
     evidence = []
 
     for zone in zones:
@@ -102,7 +104,8 @@ def collect_route_evidence(zones, top_k=5):
         documents = retrieve_news_for_zone(
             zone["latitude"],
             zone["longitude"],
-            top_k=top_k
+            top_k=top_k,
+            route_key=route_key,
         )
 
         print(f"Retrieved {len(documents)} documents.")
@@ -267,7 +270,7 @@ Retrieved route evidence:
     return result
 
 
-def analyze_route(start, end, n_zones=15, top_k=5):
+def analyze_route(start, end, n_zones=15, top_k=5, route_key=None):
     print("\nROUTEGUARD GEOPOLITICAL ANALYSIS")
     print("\nGenerating maritime route...")
 
@@ -276,7 +279,7 @@ def analyze_route(start, end, n_zones=15, top_k=5):
 
     print(f"Created {len(zones)} monitoring zones.")
 
-    evidence = collect_route_evidence(zones, top_k=top_k)
+    evidence = collect_route_evidence(zones, top_k=top_k, route_key=route_key)
 
     print("\nAnalyzing overall route situation...")
 
@@ -299,7 +302,8 @@ def analyze_route(start, end, n_zones=15, top_k=5):
         "evidence": evidence,
         "geopolitical_risk_score": result["risk_score"],
         "geopolitical_reason": result["reason"],
-        "analysis_provider": result["provider"]
+        "analysis_provider": result["provider"],
+        "route_key": route_key,
     }
 
 
