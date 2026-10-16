@@ -222,7 +222,13 @@ def search_news(query, top_k=5, route_key=None):
         raise ValueError("top_k must be at least 1.")
 
     where = {"route_key": str(route_key)} if route_key else None
-    available_count = collection.count(where=where) if where else collection.count()
+
+    if where:
+        matched = collection.get(where=where, include=[])
+        available_count = len(matched["ids"])
+    else:
+        available_count = collection.count()
+
     if available_count == 0:
         return {
             "documents": [[]],
@@ -240,12 +246,15 @@ def search_news(query, top_k=5, route_key=None):
 
     query_embedding = response.embeddings.float[0]
 
-    return collection.query(
-        query_embeddings=[query_embedding],
-        n_results=min(top_k, available_count),
-        where=where,
-        include=["documents", "metadatas", "distances"],
-    )
+    query_args = {
+        "query_embeddings": [query_embedding],
+        "n_results": min(top_k, available_count),
+        "include": ["documents", "metadatas", "distances"],
+    }
+    if where:
+        query_args["where"] = where
+
+    return collection.query(**query_args)
 
 
 # =========================================================
