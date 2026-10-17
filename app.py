@@ -8,9 +8,19 @@ import pydeck as pdk
 import streamlit as st
 from dotenv import load_dotenv
 
-# --------------------------------------------------
-# Configuration and secrets
-# --------------------------------------------------
+import logging
+import time
+
+#logging and monitoring
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
+logger = logging.getLogger("routeguard")
+
+
+#Configuration and secrets
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
@@ -238,9 +248,7 @@ with st.container(border=True):
     )
 
 
-# --------------------------------------------------
-# Run route analysis
-# --------------------------------------------------
+#Run route analysis + monitoring
 
 if run_analysis:
     if not origin or not destination:
@@ -250,18 +258,38 @@ if run_analysis:
         st.warning("Choose two different ports.")
 
     else:
+        start_time = time.perf_counter()
+
+        logger.info(
+            "Route analysis started: %s -> %s",
+            origin,
+            destination,
+        )
+
         try:
             from src.data.route_selection import select_route
 
             with st.spinner(
                 "Fetching fresh news across route zones, updating "
                 "ChromaDB, analyzing geopolitics, and fetching "
-                "weather. This can take a few minutes…"
+                "weather. This can take a few minutes..."
             ):
                 result = select_route(
                     get_coordinates(origin),
                     get_coordinates(destination),
                 )
+
+            elapsed = time.perf_counter() - start_time
+            risk_score = float(result["final_risk_score"])
+
+            logger.info(
+                "Route analysis completed | %s -> %s | "
+                "Duration: %.2f seconds | Risk: %.2f/10",
+                origin,
+                destination,
+                elapsed,
+                risk_score,
+            )
 
             st.session_state.analysis_result = result
             st.session_state.analysis_route_label = (
@@ -269,141 +297,24 @@ if run_analysis:
             )
             st.session_state.rag_messages = []
 
-        except Exception as exc:
+        except Exception:
+            elapsed = time.perf_counter() - start_time
+
+            logger.exception(
+                "Route analysis failed | %s -> %s | "
+                "Duration before failure: %.2f seconds",
+                origin,
+                destination,
+                elapsed,
+            )
+
             st.error(
                 "Route analysis could not complete. Check API "
-                "credentials, network access, and the terminal error."
+                "credentials, network access, and the application logs."
             )
-            st.exception(exc)
 
 
-# --------------------------------------------------
-# Display route analysis
-# --------------------------------------------------
-
-result = st.session_state.analysis_result
-
-if result:
-    st.divider()
-    st.header(
-        st.session_state.analysis_route_label or "Route analysis"
-    )
-
-    primary = result["primary_route"]
-    risk_score = float(result["final_risk_score"])
-    threshold = float(result.get("risk_threshold", 6.0))
-
-    is_below_threshold = (
-        result.get("status") == "primary_route_recommended"
-    )
-
-    if is_below_threshold:
-        st.success(
-            "CURRENT MODEL RECOMMENDATION: "
-            f"PRIMARY ROUTE BELOW THRESHOLD · {risk_score:.2f}/10"
-        )
-        st.write(
-            "The current risk score is below RouteGuard's configured "
-            "threshold. This is decision support, not a guarantee of "
-            "safety; check official maritime advisories before departure."
-        )
-    else:
-        st.error(
-            "CURRENT MODEL RECOMMENDATION: HIGH RISK — "
-            f"REVIEW ALTERNATIVES · {risk_score:.2f}/10"
-        )
-        st.write(
-            "The primary route has reached or exceeded RouteGuard's "
-            "risk threshold. Review the alternatives and supporting "
-            "evidence before making a decision."
-        )
-
-    c1, c2, c3, c4 = st.columns(4)
-
-    c1.metric(
-        "Combined risk",
-        f"{risk_score:.2f}/10",
-        help=(
-            "Equal-weight fusion of the current ML score and "
-            "geopolitical risk index; not a calibrated probability."
-        ),
-    )
-    c2.metric(
-        "ML hazard probability",
-        f"{float(result['ml_hazard_probability']):.1%}",
-    )
-    c3.metric(
-        "Geopolitical risk",
-        f"{float(result['geopolitical_risk_score']):.2f}/10",
-    )
-    c4.metric(
-        "Route distance",
-        f"{float(primary['distance_km']):,.0f} km",
-    )
-
-    news_status = result.get("news_ingestion", {})
-
-    c5, c6, c7, c8 = st.columns(4)
-
-    c5.metric(
-        "Estimated duration",
-        f"{float(primary['duration_hours']):,.1f} hours",
-    )
-    c6.metric(
-        "Weather monitoring zones",
-        str(result.get("weather_zones_checked", 0)),
-    )
-    c7.metric(
-        "Fresh news articles",
-        str(news_status.get("unique_articles_upserted", 0)),
-    )
-    c8.metric(
-        "News zones with results",
-        (
-            f"{news_status.get('zones_with_articles', 0)}/"
-            f"{news_status.get('zones_checked', 0)}"
-        ),
-    )
-
-    failed_news_zones = news_status.get("zones_failed", [])
-
-    if failed_news_zones:
-        st.warning(
-            "Fresh news could not be fetched for zones: "
-            f"{', '.join(map(str, failed_news_zones))}. "
-            "The analysis used route-scoped articles successfully "
-            "collected from the other zones."
-        )
-
-    st.caption(
-        "News fetched for this analysis and upserted to ChromaDB. "
-        f"Route key: {result.get('route_key', 'unavailable')}"
-    )
-    st.caption(
-        "Geopolitical LLM provider: "
-        f"{result.get('analysis_provider', 'Unknown')}"
-    )
-
-    # Route map
-    st.subheader("Route map")
-    alternatives = result.get("alternatives", [])
-    show_route_map(primary, alternatives)
-
-    # Geopolitical assessment
-    st.subheader("Geopolitical assessment")
-    st.write(
-        result.get(
-            "geopolitical_reason",
-            "No explanation was returned.",
-        )
-    )
-    st.caption(
-        f"Risk threshold: {threshold:.1f}/10. "
-        "Weather model probability and the geopolitical index use "
-        "different evidence and should be interpreted separately."
-    )
-
-    # Weather table
+    #Weather table
     st.subheader("Weather along the route")
     weather_details = result.get("weather_zone_details", [])
 
@@ -453,8 +364,12 @@ if result:
             "route-selection module."
         )
 
+    #Alternative routes
+
     # Alternative routes
     st.subheader("Alternative routes")
+
+    alternatives = result.get("alternatives", [])
 
     if alternatives:
         for alternative in alternatives:
@@ -469,15 +384,17 @@ if result:
                     "Distance",
                     f"{float(alternative['distance_km']):,.0f} km",
                 )
+
                 a2.metric(
                     "Estimated duration",
                     f"{float(alternative['duration_hours']):,.1f} hours",
                 )
 
+                restrictions = alternative.get("restrictions", [])
+
                 st.caption(
                     "Restrictions: "
-                    f"{', '.join(alternative.get('restrictions', [])) or'Default'}"
-                    "or 'Default'}"
+                    f"{', '.join(map(str, restrictions)) or 'Default'}"
                 )
 
         st.warning(
@@ -485,7 +402,6 @@ if result:
             "by distance. The existing code does not independently "
             "calculate a risk score for each alternative yet."
         )
-
     else:
         st.info(
             "The primary route is below the configured threshold, "
@@ -495,6 +411,7 @@ if result:
 
     # Retrieved evidence
     st.subheader("Retrieved geopolitical evidence")
+
     evidence = result.get("geopolitical_evidence", [])
 
     if evidence:
@@ -512,12 +429,12 @@ if result:
                 for index, document in enumerate(documents, start=1):
                     st.markdown(f"**Retrieved item {index}**")
                     st.write(document)
-
     else:
         st.info(
             "No route-level evidence list was returned by the "
             "current route-selection module."
         )
+
 
     # --------------------------------------------------
     # RAG chat
