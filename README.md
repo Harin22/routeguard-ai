@@ -24,46 +24,9 @@ The application allows users to select ports, analyze a maritime route, visualiz
 - **Application Logging:** Record route-analysis starts, completion times, risk scores, and failures.
 - **CI/CD:** Run automated checks through GitHub Actions and automatically deploy the dashboard using Streamlit Community Cloud.
 
-## System Architecture
-
-```mermaid
-flowchart TD
-    A[User selects origin and destination] --> B[Streamlit Dashboard]
-    B --> C[SeaRoute Route Generation]
-    C --> D[15 Route Monitoring Zones]
-
-    D --> E[Open-Meteo Weather API]
-    E --> F[Weather Feature Aggregation]
-    F --> G[Scikit-learn Logistic Regression]
-
-    D --> H[NewsData.io API]
-    H --> I[News Collection and Deduplication]
-    I --> J[Cohere Embeddings]
-    J --> K[(ChromaDB Vector Store)]
-
-    K --> L[Retrieve Relevant News]
-    L --> M[Gemini Geopolitical Analysis]
-    M -->|Fallback| N[Mercury API]
-    M --> O[Geopolitical Risk Score and Explanation]
-    N --> O
-
-    G --> P[Risk Score Fusion]
-    O --> P
-    P --> Q[Threshold-Based Route Decision]
-    Q --> B
-
-    K --> R[RAG Question Answering]
-    R --> S[Answer with Retrieved Sources]
-    S --> B
-
-    T[Git Push or Pull Request] --> U[GitHub Actions CI]
-    T --> V[Streamlit Community Cloud Deployment]
-```
-
-
 ## RouteGuard AI architecture diagram
 
-<img width="1774" height="887" alt="image" src="https://github.com/user-attachments/assets/72acbc23-d45a-464a-89a0-31032f8a5514" />
+<img width="1770" height="880" alt="image" src="https://github.com/user-attachments/assets/7cda470c-245c-41eb-a0d9-de4dd66d7990" />
 
 
 ## How It Works
@@ -345,11 +308,8 @@ RouteGuard should be treated as decision support for experimentation and demonst
 ## Future Improvements
 
 - Align the ML training features with live inference inputs, potentially by training a weather-only model and keeping geopolitical analysis as a separate branch.
-- Validate the risk-fusion policy so a high geopolitical warning cannot be hidden by an average.
-- Independently assess candidate alternatives before ranking routes by risk.
 - Expand test coverage for feature preparation, model predictions, risk fusion, ingestion failures, and route selection.
 - Add Evidently AI for data drift and prediction monitoring.
-- Consider Prometheus and Grafana for operational metrics and dashboards when a suitable metrics endpoint and hosting environment are available.
 - Improve RAG rate-limit handling, retries, and fallback behavior.
 - Add more systematic model evaluation using appropriately validated historical outcomes.
 
